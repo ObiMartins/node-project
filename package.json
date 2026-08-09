@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "lint": "eslint .",
+    "test": "node tests/assertion.test.js",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop simple-node-api",
     "pm2:restart": "pm2 restart simple-node-api",
@@ -17,6 +19,8 @@
     "express": "^4.21.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
     "nodemon": "^3.1.9"
   }
 }
