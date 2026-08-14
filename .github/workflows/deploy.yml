@@ -54,6 +54,11 @@ jobs:
 
             cd "$APP_DIR"
 
+            export NVM_DIR="$HOME/.nvm"
+            . "$NVM_DIR/nvm.sh"
+
+            npm use 24
+
             git fetch origin
             git reset --hard origin/main
 
