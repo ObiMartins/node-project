@@ -34,12 +34,12 @@ jobs:
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Deploy to production
-        shell: bash
-        env:
+       - name: Deploy to production
+         shell: bash
+         env:
           HOST: ${{ secrets.PROD_HOST }}
           KEY: ${{ secrets.PROD_KEY }}
-        run: |
+         run: |
           set -euo pipefail
           trap 'rm -f web-project.pem' EXIT
 
@@ -52,12 +52,13 @@ jobs:
             APP_DIR="/home/ubuntu/node-project"
             APP_PORT="3000"
 
+            export PATH="/home/ubuntu/.nvm/versions/node/v24.19.0/bin:$PATH"
+
+            node --version
+            npm --version
+            pm2 --version
+
             cd "$APP_DIR"
-
-            export NVM_DIR="$HOME/.nvm"
-            . "$NVM_DIR/nvm.sh"
-
-            npm use 24
 
             git fetch origin
             git reset --hard origin/main
