@@ -1,4 +1,4 @@
-name: Simplest Node Project CI/CD
+name: Simple Node Project CI/CD
 
 on:
   push:
