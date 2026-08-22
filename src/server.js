@@ -11,7 +11,7 @@ app.use(express.json());
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Simple Node.js API is running staging',
+    message: 'Simple Node.js API is running',
     status: 'success',
     runningWith: 'PM2 ready'
   });
