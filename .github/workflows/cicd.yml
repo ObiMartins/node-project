@@ -1,28 +1,31 @@
-name: Simple node project CICD
+name: Simplest Node Project CI/CD
 
 on:
   push:
     branches:
-      - main
-
+      - staging
   pull_request:
     branches:
-      - main
-
+      - staging
   workflow_dispatch:
 
-jobs:
+permissions:
+  contents: read
 
+concurrency:
+  group: staging-deployment
+  cancel-in-progress: false
+
+jobs:
   test:
-    
     name: Lint and Test
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name : Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -31,8 +34,59 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Lint
+      - name: Run lint
         run: npm run lint
 
-      - name: Run Test
+      - name: Run tests
         run: npm test
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: test
+    runs-on: ubuntu-latest
+    environment: staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add staging host to known hosts
+        shell: bash
+        env:
+          HOST: ${{ secrets.STAGING_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy to staging
+        shell: bash
+        env:
+          HOST: ${{ secrets.STAGING_HOST }}
+          KEY: ${{ secrets.STAGING_KEY }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f staging-project.pem' EXIT
+          printf '%s\n' "$KEY" > staging-project.pem
+          chmod 600 staging-project.pem
+          ssh -i staging-project.pem ubuntu@"$HOST" <<'EOF'
+            set -euo pipefail
+            APP_DIR="/var/www/node-project"
+            APP_PORT="3000"
+            export PATH="/home/ubuntu/.nvm/versions/node/v24.19.0/bin:$PATH"
+            node --version
+            npm --version
+            pm2 --version
+            cd "$APP_DIR"
+            git fetch origin
+            git reset --hard origin/staging
+            npm ci --omit=dev
+            pm2 startOrReload ecosystem.config.js \
+              --env staging \
+              --update-env
+            pm2 save
+            curl --fail --silent --show-error \
+              "https://staging-api.trupora.com"
+          EOF

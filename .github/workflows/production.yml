@@ -1,12 +1,10 @@
-name: Simplest Node Project CI/CD
+name: Production Deployment
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+
   workflow_dispatch:
 
 permissions:
@@ -45,7 +43,10 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
 
     steps:
       - name: Checkout code
@@ -57,9 +58,12 @@ jobs:
           HOST: ${{ secrets.PROD_HOST }}
         run: |
           set -euo pipefail
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+
           chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy to production
@@ -69,6 +73,7 @@ jobs:
           KEY: ${{ secrets.PROD_KEY }}
         run: |
           set -euo pipefail
+
           trap 'rm -f web-project.pem' EXIT
 
           printf '%s\n' "$KEY" > web-project.pem
@@ -102,4 +107,3 @@ jobs:
             curl --fail --silent --show-error \
               "http://127.0.0.1:${APP_PORT}/health"
           EOF
-
