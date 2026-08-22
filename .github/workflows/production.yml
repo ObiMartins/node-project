@@ -1,0 +1,109 @@
+name: Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+  deploy-production:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add production host to known hosts
+        shell: bash
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy to production
+        shell: bash
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          KEY: ${{ secrets.PROD_KEY }}
+        run: |
+          set -euo pipefail
+
+          trap 'rm -f web-project.pem' EXIT
+
+          printf '%s\n' "$KEY" > web-project.pem
+          chmod 600 web-project.pem
+
+          ssh -i web-project.pem ubuntu@"$HOST" <<'EOF'
+            set -euo pipefail
+
+            APP_DIR="/home/ubuntu/node-project"
+            APP_PORT="3000"
+
+            export PATH="/home/ubuntu/.nvm/versions/node/v24.19.0/bin:$PATH"
+
+            node --version
+            npm --version
+            pm2 --version
+
+            cd "$APP_DIR"
+
+            git fetch origin
+            git reset --hard origin/main
+
+            npm ci --omit=dev
+
+            pm2 startOrReload ecosystem.config.js \
+              --env production \
+              --update-env
+
+            pm2 save
+
+            curl --fail --silent --show-error \
+              "http://127.0.0.1:${APP_PORT}/health"
+          EOF
